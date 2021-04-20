@@ -1,0 +1,454 @@
+---
+title: "..don't blame it on the music.."
+author: "20029785"
+date: "03/03/2021"
+output:
+  word_document: default
+  html_document: 
+    toc: yes
+    fig_caption: yes
+    number_sections: yes
+    keep_md: yes
+    df_print: kable
+  pdf_document: 
+    toc: yes
+    fig_caption: yes
+    number_sections: yes
+    keep_tex: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+ library(readr)
+library(data.table)
+#library(ggplot2)
+library(tidyverse) 
+library(epitools)
+library(EpiStats)
+```
+
+```{css, echo = F}
+pre code, pre, code {
+  white-space: pre !important;
+  overflow-x: auto;
+  word-break: keep-all !important;
+  word-wrap: initial !important;
+}
+.boxBorder {
+     border: 2px solid #black;
+     padding: 5px;
+     outline: #696969 solid 1px;
+     outline-offset: 1px;
+}
+
+options(width=1200)
+#options(scipen = 4)
+#options(max.print=100)
+#knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+
+#   Asignment 3 Epistats 
+
+The project is to use descriptive and analytical statistical methods in r to demonstrate the use of data in answering a research question. The analysis will be presented as an RCT.
+
+###   The Research Question
+
+Does music played during PCI (per cutaneous intervention) at LHCH reduce the risk of 30 day death?
+
+###  The Study
+
+The study was designed to investigate the effect of music being played during PCI at Liverpool Heart and chest Hospital (LHCH).
+
+
+Patients were identified consecutively and randomised to usual care or usual care with music.
+Blinding of patients and operators was not possible.  The effect may be mediated by the awareness of the music in operator or patient. Time to outcome effects, regression to the mean, have been minimised by having a single category, alive or dead at 30 days [cite].
+
+Selection bias was minimised by ensuring a sufficiently sized sample, and by random allocation between groups.
+BCIS publicly available data highlights other risk factors not included in this analysis, such as presence of Diabetes, cardiogenic shock, renal failure and prior cva[cite].
+
+The reason for treatment was not given, acute PCI, has a different outcome pattern when compared to planned or elective PCI.
+
+
+The analysis was done blind. There was no loss to follow up and no attrition of groups. Intention to treat analysis would have been done if needed.
+
+Background demographics were collected to identify possible confounding factors and evidence of bias between the groups.
+
+The population size calculation identifies the number of participants required for the study. 
+It is likely that the effect of music is going to be quite small in comparison to the effect of age or IMD.
+The population calculation needs alpha and beta coefficients, here set at 5% and 80%. 
+With an actual sample size of 630, the study is powered to detect an effect of approximately 10-11%. This might lead to a type 1 error, false negative, where the real effect is smaller than this. To detect a difference of 3%, a much larger sample size of 16,728 is required. 
+
+###  Plan of statistical analysis
+
+Descriptive data is displayed in a summary chart.
+I present histograms of the continuous variables. 
+These show outcome and exposure variables as well as confounders/baseline/alt data.
+A 2* 2 table is useful for looking at the core variables. 
+Relative risk (risk ratio) gives us a comparison of risk in the exposed group with risk in the unexposed group.[cite]
+
+
+
+Simple Logistic regression shows the link between the outcome and the exposure. 
+The confounding factor data also show associations with the outcome on univariable regression.
+
+Where the dependent variable is a continuous variable then a particular set of models of linear regression are used. Where the dependent variable is binary categorical logistic regression with log odds are used.
+
+Multivariable logistic regression identifies any effect adjusted by confounding factors in general.(note confounding factor is a term which identifies a variable linked with exposure and outcome, and is outside the direct causal pathway.Confounding factors can be alternative independent variables, or as co-dependent, or collinear variables)
+
+It is also used to look at the effect of the randomisation. This analysis is controversial and isn't always appropriate.
+These compare a dependent variable with a number of variables together, this can also be linear or logistic regression. Involving more variables may produce a better fitting model, but variables which interact with each other alter the overall regression model.
+
+
+####   The Data
+
+To answer the research question we need to collect some data. 
+We need to collect data on the exposure to music (rxGrp),
+We need the outcome recording (event).
+We also need to consider potential confounding factors.
+These include age (over65) and sex (male), blood pressure (sbp), creatinine level (creat), and quintile IMD (qimd).
+
+
+
+First the data is imported into Rstudio; and is tidied into a shape which can be analysed and displayed.
+
+```{r wrangling dataset, echo=TRUE, paged.print=TRUE}
+#import data
+dataset16 <- read_csv("dataset16.csv", col_types = cols(qimd = col_character()))
+
+#change to datatable
+dataset16 <- as.data.table(dataset16)
+
+dataset16 <- dataset16[, .(cid, event , rxGrp,over65, male,qimd, sbp, creat)]
+
+#change to categorical variables to factors
+#first the main outcome 
+dataset16[,event := factor(event,
+                           levels = 0:1,
+                           labels = c("alive", "dead"))]
+#then the experimental exposure variable 
+dataset16[,rxGrp := factor(rxGrp,
+                           levels = 0:1,
+                           labels = c("usual care", "usual care + music"))] 
+
+#finally the background and possible confounders
+dataset16[,over65 := factor(over65,
+                           levels = 0:1,
+                           labels = c("under 65", "over 65"))]
+
+dataset16[,male := factor(male,
+                           levels = 0:1,
+                           labels = c("female", "male"))]
+
+
+#note qimd category needs tidying as '5 most deprived' breaks factorisation
+dataset16[, qimd := gsub("5 most deprived", "5", qimd)]
+dataset16[,qimd := factor(qimd, levels = 1:5,  labels = c("1", "2","3", "4","5"))]
+  
+
+
+#continuous variables need rounding and identifying as numerical values
+dataset16[,sbp := as.numeric(round(sbp,))]
+
+dataset16[,creat := as.numeric(round(creat, digits = 4))]
+
+
+  
+# to check the data structure   
+str(dataset16)
+```
+
+
+The data now it is tidier can be summarised by categorical factors,with mean and range statistics for the continuous data as below
+```{r echo=TRUE, paged.print=TRUE}
+summary(dataset16)
+sd(dataset16$sbp)
+
+sd(dataset16$creat)
+mortality_rate <-(141)/(630)*100
+round(mortality_rate)
+
+```
+30 day survival of 84.29% was the national average in 2016 (BCIS data), here the mortality rate is significantly lower at 22%. This suggests that the data presented is significantly different from expected. This may be due to artefact eg transposition of factor categories, or a real effect due to a population who are much more unwell.
+
+##   Review Data
+
+Data plots to describe data
+is the data in itself arranged in a usable way?
+are the continuous variables normally distributed?
+
+we need to ensure the data is manageable
+also are the exposure groups are comparable?
+It seems an even number of patients were in each exposure group were they randomised?
+were there differences between the two groups? 
+ie grouping by treatment group how were the male, sbp, qimd, creat, and age  distributed?
+
+```{r pressure, echo=TRUE, paged.print=TRUE}
+#review continuous variables to see if normal distributed
+
+ggplot(dataset16, mapping = aes(sbp))+
+  geom_histogram(color="darkblue",fill = 'darkblue')+
+  facet_wrap(~ event+rxGrp)+
+   scale_fill_brewer(palette="Paired")+
+  theme_minimal()+
+   labs(y = "Count of people in each group", 
+       x = "Systolic BP measurement in mmHg", 
+       title = "Systolic BP distribution in 2x2 table", caption = 'Showing normal distribution')
+
+```
+
+Systolic blood pressure appears to be normally distributed.
+It looks from this set of graphs that lower systolic BP may be a good thing!
+Let's see if that holds out.
+
+```{r 4, echo=TRUE, paged.print=TRUE}
+
+#dataset16[,hist(creat)]
+ggplot(dataset16, mapping = aes(creat), colour = blue)+
+  geom_histogram(color="darkblue",fill = 'darkblue')+
+  facet_wrap(~ event+rxGrp)+
+   scale_fill_brewer(palette="Blues")+
+  theme_minimal()+
+   labs(y = "Count of people in each group", 
+       x = "Creatinine measurement in mg/dl", 
+       title = "Creatinine distribution in 2x2 table", caption = 'Showing normal distribution')
+```
+
+Creatinine appears normally distributed, too.
+
+
+The categorical data
+The data around the core event how many patients appear in each group?
+
+
+The patients were randomised to two groups, an even number of patients were in each group.
+
+```{r}
+
+#dataset16[,plot(rxGrp)]
+ggplot(dataset16, mapping = aes(rxGrp, fill = male))+
+  geom_bar()+
+  
+   scale_fill_brewer(palette="Paired")+
+  theme_minimal()+
+   labs(y = "Count of people in each group", 
+       x = "Music or no music", 
+       title = "Sex distribution between treatment groups", caption = 'this seems evenly spread')
+```
+
+
+
+
+```{r}
+#dataset16[,plot(over65)]
+ggplot(dataset16, mapping = aes(rxGrp, fill = over65))+
+  geom_bar()+
+   scale_fill_brewer(palette="Paired")+
+  theme_minimal()+
+   labs(y = "Count of people in each group", 
+       x = "Music or no music", 
+       title = "Age distribution between treatment groups", caption = 'this seems evely spread')
+```
+
+
+```{r}
+
+#dataset16[,plot(qimd)]
+ggplot(dataset16, mapping = aes(rxGrp, fill = qimd))+
+  geom_bar()+
+   scale_fill_brewer(palette="Blues")+
+  theme_minimal()+
+    labs(y = "Count of people in each group", 
+       x = "Music or no music", 
+       title = "IMD distribution between treatment groups", caption = 'there does seem some variation between these groups')
+
+```
+
+
+## Results
+Most importantly how does the core outcome relate to the core exposure?
+The null hypothesis is that the addition of music has no effect on the risk of death.
+setting up a 2*2 table can help to calculate a risk ratio
+
+```{r risk ratio, echo=TRUE, paged.print=TRUE}
+#using epitools risk ration function reports a 2X2 table and risk ratio
+riskratio( dataset16$event,dataset16$rxGrp)
+#using epiStats cs function identifies relative risk more clearly
+cs(dataset16, 'event','rxGrp')
+#the graph helps for viualising the effect
+ggplot(dataset16, mapping = aes(event,fill = rxGrp))+
+  geom_bar()+
+  scale_fill_brewer(palette="Paired")+
+  theme_minimal()
+
+```
+There is a positive benefit to the intervention, the confidence intervals span 1 which indicate that the result is not statistically significant, that the null hypothesis is not disproven. Calculating a p value using chi squared gives a value of 0.214.
+risk reduction = 0.04
+attributable risk = 
+nnt =
+
+
+
+
+The graph appears easier to interpret
+
+```{r echo=TRUE, paged.print=TRUE}
+ggplot(dataset16, mapping = aes(rxGrp,fill = event))+
+  geom_bar(position=position_dodge())+
+
+   scale_fill_brewer(palette="Paired")+
+  theme_minimal()+
+    labs(y = "Count of people in each group", 
+       x = "Music or no music", 
+       title = "IMD distribution between treatment groups", caption = 'there does seem some variation between these groups')
+
+```
+This does seem to show that more are still alive having heard the music. It would be good to identify some confidence intervals!
+
+## Univarible logistic regression  analysis
+
+Which variables individually affect the outcome? Which are associated with increased deaths?
+Death is a categorical outcome. This requires logistic regression.
+
+```{r log reg, echo=TRUE, paged.print=TRUE}
+# the logistic regression model 
+modelm <- glm(event ~ rxGrp, data = dataset16, family = binomial(link = "logit"))
+# to view the result with log odds
+summary(modelm)
+# to view the result after inverse log
+exp(coef(modelm))
+#and teh confidence intervals
+exp(confint(modelm))
+
+```
+First the key exposure measure; whilst there is a small reduction in deaths in the treatment group this doesn't seem to reach significance level of 5%.
+
+
+
+Looking at the possible confounding factors
+
+```{r paged.print=TRUE}
+modelx <- glm(event ~ male, data = dataset16, family = binomial(link = "logit"))
+summary(modelx)
+exp(coef(modelx))
+exp(confint(modelx, level = 0.95))
+```
+Men are 19% more likely to die than women, though this is not statistically significant at 5% level
+
+```{r echo=TRUE, paged.print=TRUE}
+modelq <- glm(event ~ qimd, data = dataset16, family = binomial(link = "logit"))
+summary(modelq)
+exp(coef(modelq))
+exp(confint(modelq))
+
+anova(modelq, test = "LRT")
+```
+The risk of death is higher the more deprived, there is a dose response relationship, with a greater relation at greater level of deprivation.
+
+
+
+
+```{r echo=TRUE, paged.print=TRUE}
+
+model65 <- glm(event ~ over65, data = dataset16, family = binomial(link = "logit"))
+summary(model65)
+exp(coef(model65))
+exp(confint(model65))
+```
+Being over 65 increases the odds of death by 140% and is statistically significant at 5% level
+
+```{r echo=TRUE, message=FALSE, paged.print=TRUE}
+modelbp <- glm(event ~ sbp, data = dataset16, family = binomial(link = "logit"))
+summary(modelbp)
+exp(coef(modelbp))
+exp(confint(modelbp))
+
+```
+The odds of death increase by 4 % for each increase in systolic BP, this is statistically significant.
+
+
+```{r echo=TRUE, paged.print=TRUE}
+modelcreat <- glm(event ~ creat, data = dataset16, family = binomial(link = "logit"))
+summary(modelcreat)
+exp(coef(modelcreat))
+exp(confint(modelcreat))
+```
+Music and sex don't seem to make a difference in univariable analysis. It seems qimd, over65, creat, sbp are statistically significant. It can be difficult to know which factors work together. Is age a proxy for creat, or sbp? Are the older patients more female?
+
+```{r echo=TRUE, paged.print=TRUE}
+model56x <- glm(over65 ~ male ,data = dataset16,family = binomial(link = "logit") )
+summary(model56x)
+exp(coef(model56x))
+exp(confint(model56x))
+```
+No it doesn't seem that there is a link between being older and being female
+We can assume that the effect described is correct.
+
+
+## Mulivariable logistic regression
+
+We can also ask was there an even distribution of cases in the two treatment groups?
+The randomisation process should have controlled this for us. 
+Multi variable logistic regression can identify whether p values indicate significance, but the analysis is made redundant by the randomisation step.
+
+```{r echo=TRUE, paged.print=TRUE}
+
+modelgrp <- glm(rxGrp ~  qimd + creat + sbp + over65 + male, data = dataset16, family = binomial(link = "logit"))
+summary(modelgrp)
+exp(coef(modelgrp))
+exp(confint(modelgrp))
+summary(modelgrp)$r.squared
+summary(modelgrp)$AIC
+
+```
+It does seem that there was no statistically different result for any of the confounders within the treatment groups
+
+
+
+
+
+In order to answer the question does music make a difference we need to combine the effect that music didn't seem to have alone with confounding effects which may be affecting a real effect of the music. putting everything in we get
+
+```{r echo=TRUE, paged.print=TRUE}
+
+modelall <- glm(event ~ rxGrp + qimd + creat + sbp + over65 + male, data = dataset16, family = binomial(link = "logit"))
+summary(modelall)
+exp(coef(modelall))
+exp(confint(modelall))
+summary(modelall)$r.squared
+summary(modelall)$AIC
+
+ 
+```
+The rxgrp does not reach a significance level of 5%
+
+are there other models where it might, or which are better predictors of death?
+
+```{r echo=TRUE, paged.print=TRUE}
+
+modelall <- glm(event ~ rxGrp + qimd + sbp +male, data = dataset16, family = binomial(link = "logit"))
+summary(modelall)
+exp(coef(modelall))
+exp(confint(modelall))
+summary(modelall$r.squared)
+summary(modelall$AIC)
+boxplot(modelall$linear.predictors,exp(coef(modelall)))
+ 
+```
+
+
+
+
+
+##  In Conclusion
+
+This study confirms findings of otehr studies. 
+Death should not be blamed on the music.
+It is not a statistically significant factor for the sample study shown.
+Instead qimd5, sbp, and male sex are more related to risk of death.
+The difference in the multiple regression may be that some factors act with others as colliders or blockers. For example sbp is possibly age and sex related, as well as showing some qimd variation.
+
+#  Bibliography
